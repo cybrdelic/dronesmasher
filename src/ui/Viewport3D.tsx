@@ -198,9 +198,11 @@ export const Viewport3D: React.FC = () => {
         },
       });
 
-      // Create depth texture
+      // Create depth texture (not used in initial setup, created per-frame instead)
+      // We'll create this dynamically in the render loop to handle resizing
+      const canvasEl = gpuCtx.canvas!;
       const depthTexture = gpuCtx.device.createTexture({
-        size: [canvas.width, canvas.height],
+        size: [canvasEl.width, canvasEl.height],
         format: 'depth24plus',
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
