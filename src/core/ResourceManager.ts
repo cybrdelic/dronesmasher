@@ -92,6 +92,34 @@ export class ResourceManager {
     return texture;
   }
 
+  // Depth texture management (auto-creates and handles resizing)
+  getOrCreateDepthTexture(width: number, height: number): GPUTexture {
+    const label = `depth-${width}x${height}`;
+
+    // Check if we have a depth texture of this size
+    const existing = this.textures.get(label);
+    if (existing) {
+      return existing;
+    }
+
+    // Clean up any old depth textures with different sizes
+    const toDelete: string[] = [];
+    for (const [key, texture] of this.textures) {
+      if (key.startsWith('depth-')) {
+        toDelete.push(key);
+      }
+    }
+    toDelete.forEach(key => this.destroyTexture(key));
+
+    // Create new depth texture
+    return this.createTexture({
+      label,
+      size: { width, height },
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+  }
+
   getTexture(label: string): GPUTexture | undefined {
     return this.textures.get(label);
   }
