@@ -1,5 +1,5 @@
 import React from 'react';
-import { Viewport3DEnhanced } from './Viewport3DEnhanced';
+import { Viewport3DCinematic } from './Viewport3DCinematic';
 import { ErrorPanel } from './ErrorPanel';
 import { DebugPanel } from './DebugPanel';
 import './App.css';
@@ -9,12 +9,12 @@ export const App: React.FC = () => {
     <div className="app">
       <header className="app-header">
         <h1>DroneSmasher</h1>
-        <p>Cinematic Drone Frame Visualization - Press SPACE to pause/play</p>
+        <p>Houdini-Level Cinematic Rendering - Press SPACE to pause/play | Keys 5-0 for sequences</p>
       </header>
 
       <main className="app-main">
         <div className="viewport-container">
-          <Viewport3DEnhanced />
+          <Viewport3DCinematic />
         </div>
 
         <aside className="control-panel">
