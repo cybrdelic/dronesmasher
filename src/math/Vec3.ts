@@ -30,7 +30,7 @@ export class Vec3 {
     return new Vec3(0, 0, 1);
   }
 
-  static from Array(arr: number[]): Vec3 {
+  static fromArray(arr: number[]): Vec3 {
     return new Vec3(arr[0] ?? 0, arr[1] ?? 0, arr[2] ?? 0);
   }
 
