@@ -35,36 +35,36 @@ export interface SequenceConfig {
 export const CINEMATIC_SEQUENCES: Record<string, SequenceConfig> = {
   HERO_REVEAL: {
     name: 'Hero Reveal',
-    duration: 8.0,
+    duration: 10.0,
     loop: false,
     keyframes: [
       {
         time: 0.0,
-        position: new Vec3(0, 0.5, 15),
-        lookTarget: Vec3.zero(),
-        fov: 60,
-        easing: EasingType.EASE_IN_OUT,
+        position: new Vec3(0, 0.3, 18),
+        lookTarget: new Vec3(0, -0.5, 0),
+        fov: 30,
+        easing: EasingType.EASE_IN,
       },
       {
-        time: 2.0,
-        position: new Vec3(-8, 3, 8),
+        time: 3.0,
+        position: new Vec3(-10, 4, 10),
         lookTarget: new Vec3(0, 0.5, 0),
-        fov: 45,
+        fov: 40,
         easing: EasingType.DRAMATIC,
       },
       {
-        time: 5.0,
-        position: new Vec3(5, 2, 10),
+        time: 6.0,
+        position: new Vec3(6, 2, 12),
         lookTarget: new Vec3(0, 0, 0),
         fov: 35,
-        easing: EasingType.EASE_OUT,
+        easing: EasingType.EASE_IN_OUT,
       },
       {
-        time: 8.0,
-        position: new Vec3(0, 2, 8),
-        lookTarget: Vec3.zero(),
-        fov: 45,
-        easing: EasingType.EASE_IN_OUT,
+        time: 10.0,
+        position: new Vec3(0, 3, 9),
+        lookTarget: new Vec3(0, 0.5, 0),
+        fov: 50,
+        easing: EasingType.EASE_OUT,
       },
     ],
   },
@@ -114,29 +114,36 @@ export const CINEMATIC_SEQUENCES: Record<string, SequenceConfig> = {
 
   DOLLY_ZOOM: {
     name: 'Dolly Zoom (Vertigo Effect)',
-    duration: 5.0,
+    duration: 6.0,
     loop: false,
     keyframes: [
       {
         time: 0.0,
-        position: new Vec3(0, 2, 15),
+        position: new Vec3(0, 2, 20),
         lookTarget: Vec3.zero(),
-        fov: 25, // Wide angle at distance
-        easing: EasingType.EASE_IN_OUT,
+        fov: 20, // Very narrow angle at far distance
+        easing: EasingType.EASE_IN,
       },
       {
-        time: 2.5,
-        position: new Vec3(0, 2, 8),
+        time: 2.0,
+        position: new Vec3(0, 2, 12),
         lookTarget: Vec3.zero(),
-        fov: 45, // Medium FOV at medium distance
+        fov: 35, // Medium-narrow
         easing: EasingType.LINEAR,
       },
       {
-        time: 5.0,
-        position: new Vec3(0, 2, 4),
+        time: 4.0,
+        position: new Vec3(0, 2, 6),
         lookTarget: Vec3.zero(),
-        fov: 75, // Telephoto close up - keeps subject same size
-        easing: EasingType.EASE_IN_OUT,
+        fov: 60, // Getting wider
+        easing: EasingType.LINEAR,
+      },
+      {
+        time: 6.0,
+        position: new Vec3(0, 2, 3),
+        lookTarget: Vec3.zero(),
+        fov: 95, // VERY wide angle close up - dramatic!
+        easing: EasingType.EASE_OUT,
       },
     ],
   },
@@ -208,21 +215,28 @@ export const CINEMATIC_SEQUENCES: Record<string, SequenceConfig> = {
 
   CRASH_ZOOM: {
     name: 'Crash Zoom (Intense)',
-    duration: 1.5,
+    duration: 2.0,
     loop: false,
     keyframes: [
       {
         time: 0.0,
-        position: new Vec3(0, 2, 20),
+        position: new Vec3(0, 2, 25),
         lookTarget: Vec3.zero(),
-        fov: 40,
+        fov: 35,
         easing: EasingType.EASE_IN,
       },
       {
-        time: 1.5,
-        position: new Vec3(0, 2, 4),
+        time: 0.5,
+        position: new Vec3(0, 2, 18),
         lookTarget: Vec3.zero(),
-        fov: 50,
+        fov: 40,
+        easing: EasingType.LINEAR,
+      },
+      {
+        time: 2.0,
+        position: new Vec3(0, 2, 3),
+        lookTarget: Vec3.zero(),
+        fov: 70,
         easing: EasingType.DRAMATIC,
       },
     ],
@@ -236,6 +250,11 @@ export class CinematicSequence {
   private playing: boolean = false;
   private paused: boolean = false;
 
+  // Smoothing for cinematic feel
+  private currentPosition: Vec3 = Vec3.zero();
+  private currentLookTarget: Vec3 = Vec3.zero();
+  private smoothness: number = 0.15; // Camera motion smoothing
+
   constructor(camera: Camera, sequence: SequenceConfig | string) {
     this.camera = camera;
 
@@ -247,6 +266,10 @@ export class CinematicSequence {
     } else {
       this.config = sequence;
     }
+
+    // Initialize smoothing to current camera position
+    this.currentPosition = this.camera.getPosition();
+    this.currentLookTarget = Vec3.zero();
   }
 
   play(): void {
@@ -306,13 +329,15 @@ export class CinematicSequence {
     const t = (this.currentTime - prevKeyframe.time) / duration;
     const easedT = this.applyEasing(t, prevKeyframe.easing ?? EasingType.LINEAR);
 
-    // Interpolate position
-    const position = this.lerpVec3(prevKeyframe.position, nextKeyframe.position, easedT);
+    // Interpolate target position and look target
+    const targetPosition = this.lerpVec3(prevKeyframe.position, nextKeyframe.position, easedT);
+    const targetLookTarget = this.lerpVec3(prevKeyframe.lookTarget, nextKeyframe.lookTarget, easedT);
 
-    // Interpolate look target
-    const lookTarget = this.lerpVec3(prevKeyframe.lookTarget, nextKeyframe.lookTarget, easedT);
+    // Apply smoothing for organic camera motion
+    this.currentPosition = this.lerpVec3(this.currentPosition, targetPosition, this.smoothness);
+    this.currentLookTarget = this.lerpVec3(this.currentLookTarget, targetLookTarget, this.smoothness);
 
-    // Interpolate FOV
+    // Interpolate FOV (no smoothing needed - looks better snappy)
     if (prevKeyframe.fov !== undefined && nextKeyframe.fov !== undefined) {
       const fov = this.lerp(prevKeyframe.fov, nextKeyframe.fov, easedT);
       this.camera.setPerspective(
@@ -323,8 +348,8 @@ export class CinematicSequence {
       );
     }
 
-    // Apply to camera
-    this.camera.lookAt(position, lookTarget, Vec3.up());
+    // Apply smoothed position to camera
+    this.camera.lookAt(this.currentPosition, this.currentLookTarget, Vec3.up());
   }
 
   private lerpVec3(a: Vec3, b: Vec3, t: number): Vec3 {

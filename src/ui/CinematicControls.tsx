@@ -28,12 +28,12 @@ export const CinematicControls: React.FC<CinematicControlsProps> = ({
   effects,
 }) => {
   const sequences = [
-    { id: 'HERO_REVEAL', name: 'Hero Reveal', duration: '8s' },
+    { id: 'HERO_REVEAL', name: 'Hero Reveal', duration: '10s' },
     { id: 'DRAMATIC_ORBIT', name: 'Dramatic Orbit', duration: '12s' },
-    { id: 'DOLLY_ZOOM', name: 'Dolly Zoom', duration: '4s' },
+    { id: 'DOLLY_ZOOM', name: 'Dolly Zoom', duration: '6s' },
     { id: 'FLY_THROUGH', name: 'Fly-Through', duration: '6s' },
     { id: 'LOW_ANGLE_HERO', name: 'Low Angle Hero', duration: '5s' },
-    { id: 'CRASH_ZOOM', name: 'Crash Zoom', duration: '1.5s' },
+    { id: 'CRASH_ZOOM', name: 'Crash Zoom', duration: '2s' },
   ];
 
   return (

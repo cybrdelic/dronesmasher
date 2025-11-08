@@ -38,10 +38,11 @@ export const Viewport3DEnhanced: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
   const rotationRef = useRef<number>(0);
+  const isAnimatingRef = useRef<boolean>(true); // Ref for render loop
 
   // State
   const [status, setStatus] = useState<string>('Initializing...');
-  const [isAnimating, setIsAnimating] = useState<boolean>(true);
+  const [isAnimating, setIsAnimating] = useState<boolean>(true); // State for UI
   const [currentSequence, setCurrentSequence] = useState<string | null>(null);
   const [effects, setEffects] = useState({
     bloom: true,
@@ -132,7 +133,11 @@ export const Viewport3DEnhanced: React.FC = () => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === ' ') {
         e.preventDefault();
-        setIsAnimating((prev) => !prev);
+        setIsAnimating((prev) => {
+          const newValue = !prev;
+          isAnimatingRef.current = newValue; // Update ref for render loop
+          return newValue;
+        });
       }
 
       // Number keys 5-0 for quick sequence access
@@ -183,7 +188,11 @@ export const Viewport3DEnhanced: React.FC = () => {
   }
 
   function toggleAnimation() {
-    setIsAnimating((prev) => !prev);
+    setIsAnimating((prev) => {
+      const newValue = !prev;
+      isAnimatingRef.current = newValue; // Update ref for render loop
+      return newValue;
+    });
   }
 
   function toggleEffect(effect: string, enabled: boolean) {
@@ -222,8 +231,8 @@ export const Viewport3DEnhanced: React.FC = () => {
       }
     }
 
-    // Update cube rotation (if animating)
-    if (isAnimating) {
+    // Update cube rotation (if animating) - Use ref instead of state!
+    if (isAnimatingRef.current) {
       rotationRef.current += deltaTime;
     }
 
