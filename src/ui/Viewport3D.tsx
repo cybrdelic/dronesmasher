@@ -249,8 +249,8 @@ export const Viewport3D: React.FC = () => {
         const rotX = Mat4.rotationX(rotationRef.current * 0.7);
         const model = rotY.mul(rotX);
 
-        const view = camera.viewMatrix;
-        const projection = camera.projectionMatrix;
+        const view = camera.getViewMatrix();
+        const projection = camera.getProjectionMatrix();
         const mvp = projection.mul(view).mul(model);
 
         // Update uniform buffer
