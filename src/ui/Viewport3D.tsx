@@ -16,9 +16,11 @@ export const Viewport3D: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Skip if already initialized
-    if (gpuContextRef.current) {
-      Logger.debug('WebGPU already initialized, skipping');
+    // CRITICAL: Check if this canvas element already has WebGPU initialized
+    // This prevents double-initialization during StrictMode double-mounting
+    // We use a data attribute because refs are recreated but canvas element persists
+    if (canvas.dataset.webgpuInitialized === 'true') {
+      Logger.debug('Canvas already has WebGPU initialized (StrictMode remount), skipping');
       return;
     }
 
@@ -34,6 +36,9 @@ export const Viewport3D: React.FC = () => {
         Logger.info('Initializing WebGPU...');
         const gpuCtx = await WebGPUContext.initialize({ canvas });
         gpuContextRef.current = gpuCtx;
+
+        // Mark canvas as initialized (prevents StrictMode double-init)
+        canvas.dataset.webgpuInitialized = 'true';
 
         // Create camera
         const camera = new Camera({
@@ -135,10 +140,26 @@ export const Viewport3D: React.FC = () => {
         animationFrameRef.current = null;
       }
 
-      if (gpuContextRef.current) {
-        Logger.info('Cleaning up WebGPU context');
-        gpuContextRef.current.destroy();
-        gpuContextRef.current = null;
+      // Only destroy on REAL unmount, not StrictMode cleanup
+      // StrictMode cleanup happens immediately before remount, so canvas persists
+      // We detect real unmount by checking if canvas is still in DOM after a tick
+      const currentCanvas = canvasRef.current;
+      if (gpuContextRef.current && currentCanvas) {
+        setTimeout(() => {
+          // If canvas is no longer in document, it's a real unmount
+          if (!document.contains(currentCanvas)) {
+            Logger.info('Real unmount detected, cleaning up WebGPU');
+            if (gpuContextRef.current) {
+              gpuContextRef.current.destroy();
+              gpuContextRef.current = null;
+            }
+            if (currentCanvas) {
+              delete currentCanvas.dataset.webgpuInitialized;
+            }
+          } else {
+            Logger.debug('StrictMode cleanup, keeping WebGPU context alive');
+          }
+        }, 0);
       }
 
       cameraRef.current = null;
