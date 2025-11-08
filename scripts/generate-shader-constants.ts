@@ -6,9 +6,13 @@
  */
 
 import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { SimulationConstants } from '../src/constants/SimulationConstants';
 import { BindingRegistry, generateBindingDeclaration } from '../src/constants/BindingRegistry';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function generateShaderConstants(): string {
   const { GRID, OPTIMIZATION, FEA, MPM } = SimulationConstants;

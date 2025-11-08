@@ -21,6 +21,8 @@ Thumbs.db
 
 # Generated files
 src/shaders/common/constants.wgsl
+src/**/*.js
+scripts/**/*.js
 
 # Logs
 *.log

@@ -4,6 +4,7 @@
 
 import { Logger } from '../utils/Logger';
 import { ErrorManager } from '../utils/ErrorManager';
+import { ResourceManager } from './ResourceManager';
 
 export interface WebGPUContextOptions {
   canvas?: HTMLCanvasElement;
@@ -17,6 +18,12 @@ export class WebGPUContext {
   public readonly context?: GPUCanvasContext;
   public readonly presentationFormat?: GPUTextureFormat;
   public readonly canvas?: HTMLCanvasElement;
+  public readonly deviceId: number;
+  public readonly resourceManager: ResourceManager;
+
+  // Device tracking for debugging
+  private static deviceCounter = 0;
+  private static activeDevices = new Set<number>();
 
   private constructor(
     adapter: GPUAdapter,
@@ -30,6 +37,18 @@ export class WebGPUContext {
     this.context = context;
     this.presentationFormat = presentationFormat;
     this.canvas = canvas;
+
+    // Assign unique device ID for tracking
+    this.deviceId = WebGPUContext.deviceCounter++;
+    WebGPUContext.activeDevices.add(this.deviceId);
+
+    // Initialize resource manager
+    this.resourceManager = new ResourceManager(device);
+
+    Logger.info(`Created WebGPU Device #${this.deviceId}`, {
+      totalActiveDevices: WebGPUContext.activeDevices.size,
+      activeDeviceIds: Array.from(WebGPUContext.activeDevices)
+    });
   }
 
   static async initialize(options: WebGPUContextOptions = {}): Promise<WebGPUContext> {
