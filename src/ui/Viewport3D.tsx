@@ -7,28 +7,38 @@ import { ErrorManager } from '../utils/ErrorManager';
 
 export const Viewport3D: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gpuContextRef = useRef<WebGPUContext | null>(null);
+  const cameraRef = useRef<Camera | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const [status, setStatus] = useState<string>('Initializing...');
-  const [gpuContext, setGpuContext] = useState<WebGPUContext | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    let animationFrameId: number;
-    let gpuCtx: WebGPUContext;
-    let camera: Camera;
+    // Skip if already initialized
+    if (gpuContextRef.current) {
+      Logger.debug('WebGPU already initialized, skipping');
+      return;
+    }
 
     async function init() {
       try {
+        // Set canvas size FIRST
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+
         // Initialize WebGPU
         Logger.info('Initializing WebGPU...');
-        gpuCtx = await WebGPUContext.initialize({ canvas: canvas! });
-        setGpuContext(gpuCtx);
+        const gpuCtx = await WebGPUContext.initialize({ canvas });
+        gpuContextRef.current = gpuCtx;
 
         // Create camera
-        camera = new Camera({
+        const camera = new Camera({
           fovDegrees: 45,
-          aspect: canvas!.width / canvas!.height,
+          aspect: canvas.width / canvas.height,
           near: 0.001,
           far: 10.0
         });
@@ -38,6 +48,7 @@ export const Viewport3D: React.FC = () => {
           new Vec3(0, 0, 0),
           Vec3.up()
         );
+        cameraRef.current = camera;
 
         Logger.info('WebGPU initialized successfully');
         setStatus('Ready');
@@ -53,13 +64,19 @@ export const Viewport3D: React.FC = () => {
     }
 
     function render() {
-      if (!gpuCtx || !camera) return;
+      const gpuCtx = gpuContextRef.current;
+      const camera = cameraRef.current;
+
+      if (!gpuCtx || !camera) {
+        animationFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
 
       try {
         // Get current canvas texture
         const texture = gpuCtx.getCurrentTexture();
         if (!texture) {
-          animationFrameId = requestAnimationFrame(render);
+          animationFrameRef.current = requestAnimationFrame(render);
           return;
         }
 
@@ -89,56 +106,42 @@ export const Viewport3D: React.FC = () => {
       }
 
       // Continue loop
-      animationFrameId = requestAnimationFrame(render);
+      animationFrameRef.current = requestAnimationFrame(render);
     }
 
-    // Handle resize
+    // Handle resize - only update camera aspect ratio
+    // Don't reconfigure canvas context as it can cause device mismatches
     const handleResize = () => {
       if (!canvas) return;
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
 
+      const camera = cameraRef.current;
       if (camera) {
-        camera.setAspect(canvas.width / canvas.height);
-      }
-
-      // If context exists, reconfigure it
-      if (gpuCtx?.context && gpuCtx.presentationFormat) {
-        try {
-          gpuCtx.context.configure({
-            device: gpuCtx.device,
-            format: gpuCtx.presentationFormat,
-            alphaMode: 'premultiplied',
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
-          });
-        } catch (error) {
-          Logger.warn('Failed to reconfigure canvas on resize', error);
-        }
+        const rect = canvas.getBoundingClientRect();
+        camera.setAspect(rect.width / rect.height);
       }
     };
 
-    // Set initial size before WebGPU init
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-
     window.addEventListener('resize', handleResize);
 
-    // Initialize WebGPU after canvas is sized
+    // Initialize WebGPU
     init();
 
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
+
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
-      if (gpuCtx) {
-        gpuCtx.destroy();
+
+      if (gpuContextRef.current) {
+        Logger.info('Cleaning up WebGPU context');
+        gpuContextRef.current.destroy();
+        gpuContextRef.current = null;
       }
+
+      cameraRef.current = null;
     };
   }, []);
 
