@@ -94,11 +94,12 @@ export const Viewport3D: React.FC = () => {
         // Create command encoder
         const encoder = gpuCtx.createCommandEncoder('frame');
 
-        // Clear pass
+        // Clear pass with bright cyan to prove WebGPU is working
+        // Once we add 3D geometry, we'll change this to a dark color
         const renderPass = encoder.beginRenderPass({
           colorAttachments: [{
             view: texture.createView(),
-            clearValue: { r: 0.1, g: 0.1, b: 0.15, a: 1.0 },
+            clearValue: { r: 0.0, g: 0.6, b: 0.8, a: 1.0 }, // Bright cyan
             loadOp: 'clear',
             storeOp: 'store'
           }]
