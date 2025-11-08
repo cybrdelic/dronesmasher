@@ -387,9 +387,9 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   device.queue.writeBuffer(indexBuffer, 0, indices);
 
   // Large uniform buffer for all cinematic data
-  // 128 floats * 4 bytes = 512 bytes
+  // 136 floats * 4 bytes = 544 bytes (aligned for WebGPU)
   const uniformBuffer = device.createBuffer({
-    size: 512,
+    size: 544,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
@@ -470,8 +470,8 @@ function renderFrame(
   const normalMatrix = model.inverse() ?? Mat4.identity();
   const cameraPos = camera.getPosition();
 
-  // Pack all uniform data (128 floats = 512 bytes)
-  const uniformData = new Float32Array(128);
+  // Pack all uniform data (136 floats = 544 bytes for WebGPU alignment)
+  const uniformData = new Float32Array(136);
 
   // Matrices (0-47)
   uniformData.set(mvp.toArray(), 0);
