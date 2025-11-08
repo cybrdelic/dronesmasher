@@ -14,6 +14,7 @@ import { CinematicRenderer, AspectRatio, ColorGrade } from '../rendering/Cinemat
 import { Vec3 } from '../math/Vec3';
 import { Mat4 } from '../math/Mat4';
 import { Logger } from '../utils/Logger';
+import { packCinematicUniforms, CINEMATIC_UNIFORM_BUFFER_SIZE, type CinematicUniformLayout } from '../shaders/UniformLayouts';
 import './Viewport3DEnhanced.css';
 
 interface CubeResources {
@@ -389,10 +390,10 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   device.queue.writeBuffer(indexBuffer, 0, indices);
 
   // Uniform buffer for Houdini-level cinematic shader
-  // WebGPU reports 400 bytes minimum, use 416 (104 floats) for safety
+  // Size validated at build time by validate-shaders.ts
   const uniformBuffer = device.createBuffer({
-    label: 'Cinematic Uniform Buffer (416 bytes)',
-    size: 416,
+    label: `Cinematic Uniform Buffer (${CINEMATIC_UNIFORM_BUFFER_SIZE} bytes)`,
+    size: CINEMATIC_UNIFORM_BUFFER_SIZE,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
@@ -505,78 +506,63 @@ function renderFrame(
   const normalMatrix = model.inverse() ?? Mat4.identity();
   const cameraPos = camera.getPosition();
 
-  // Pack uniforms for Houdini-level shader (104 floats = 416 bytes)
-  const uniformData = new Float32Array(104);
-
-  // Matrices (0-47)
-  uniformData.set(mvp.toArray(), 0);              // 0-15: MVP matrix
-  uniformData.set(model.toArray(), 16);           // 16-31: Model matrix
-  uniformData.set(normalMatrix.toArray(), 32);    // 32-47: Normal matrix
-
-  // Camera and time (48-51)
-  uniformData.set([cameraPos.x, cameraPos.y, cameraPos.z], 48);
-  uniformData[51] = time * 0.001;
-
-  // Main light (52-60)
+  // Pack uniforms using type-safe function (compile-time validated)
   const lights = systems.lighting.getAllLights();
   const mainLight = lights[0] || {
     direction: new Vec3(0.5, -0.7, 0.3).normalize(),
     color: new Vec3(1.2, 1.1, 1.0),
     intensity: 1.5,
   };
-  uniformData.set([mainLight.direction.x, mainLight.direction.y, mainLight.direction.z], 52);
-  uniformData[55] = 0; // padding
-  uniformData.set([mainLight.color.x, mainLight.color.y, mainLight.color.z], 56);
-  uniformData[59] = mainLight.intensity;
-
-  // Environment (60-68)
   const ambient = systems.lighting.getAmbient();
   const atmosColor = systems.lighting.getAtmosphericColor();
   const atmosDensity = systems.lighting.getAtmosphericDensity();
-
-  uniformData.set([ambient.x, ambient.y, ambient.z], 60);
-  uniformData[63] = 0; // padding
-  uniformData.set([atmosColor.x, atmosColor.y, atmosColor.z], 64);
-  uniformData[67] = atmosDensity;
-
-  // Cinematic settings (68-76)
   const cinematicSettings = systems.cinematic.getSettings();
-  uniformData[68] = cinematicSettings.vignetteStrength;
-  uniformData[69] = cinematicSettings.filmGrainStrength;
-  uniformData[70] = cinematicSettings.chromaticAberration;
-  uniformData[71] = cinematicSettings.depthOfField ? 1.0 : 0.0;
-  uniformData[72] = cinematicSettings.focalDistance;
-  uniformData[73] = cinematicSettings.aperture;
-  uniformData[74] = systems.cinematic.getColorGradeId();
-  uniformData[75] = 0; // padding
-
-  // Volumetric settings (76-84)
   const volumetric = systems.atmosphere.getVolumetricSettings();
-  uniformData[76] = volumetric.enabled ? 1.0 : 0.0;
-  uniformData[77] = volumetric.density;
-  uniformData[78] = volumetric.scattering;
-  uniformData[79] = volumetric.lightShaftIntensity;
-  uniformData[80] = volumetric.steps;
-  uniformData.set([0, 0, 0], 81); // padding vec3
-
-  // Fog settings (84-92)
   const fog = systems.atmosphere.getFogSettings();
-  uniformData[84] = fog.enabled ? 1.0 : 0.0;
-  uniformData[85] = fog.near;
-  uniformData[86] = fog.far;
-  uniformData[87] = fog.density;
-  uniformData.set([fog.color.x, fog.color.y, fog.color.z], 88);
-  uniformData[91] = fog.heightFalloff;
-
-  // Letterbox (92-95)
   const letterbox = systems.cinematic.getLetterboxDimensions();
   const canvas = systems.cinematic.getCanvas();
-  uniformData.set([
-    letterbox.top / canvas.height,
-    letterbox.bottom / canvas.height,
-    letterbox.left / canvas.width,
-    letterbox.right / canvas.width,
-  ], 92);
+
+  const uniformData = packCinematicUniforms({
+    modelViewProjection: mvp.toArray(),
+    modelMatrix: model.toArray(),
+    normalMatrix: normalMatrix.toArray(),
+    cameraPosition: [cameraPos.x, cameraPos.y, cameraPos.z],
+    time: time * 0.001,
+    lightDirection: [mainLight.direction.x, mainLight.direction.y, mainLight.direction.z],
+    _pad1: 0,
+    lightColor: [mainLight.color.x, mainLight.color.y, mainLight.color.z],
+    lightIntensity: mainLight.intensity,
+    ambientColor: [ambient.x, ambient.y, ambient.z],
+    _pad2: 0,
+    atmosphericColor: [atmosColor.x, atmosColor.y, atmosColor.z],
+    atmosphericDensity: atmosDensity,
+    vignetteStrength: cinematicSettings.vignetteStrength,
+    filmGrainStrength: cinematicSettings.filmGrainStrength,
+    chromaticAberration: cinematicSettings.chromaticAberration,
+    dofEnabled: cinematicSettings.depthOfField ? 1.0 : 0.0,
+    focalDistance: cinematicSettings.focalDistance,
+    aperture: cinematicSettings.aperture,
+    colorGradeType: systems.cinematic.getColorGradeId(),
+    _pad3: 0,
+    volumetricEnabled: volumetric.enabled ? 1.0 : 0.0,
+    volumetricDensity: volumetric.density,
+    volumetricScattering: volumetric.scattering,
+    lightShaftIntensity: volumetric.lightShaftIntensity,
+    volumetricSteps: volumetric.steps,
+    _pad4: [0, 0, 0],
+    fogEnabled: fog.enabled ? 1.0 : 0.0,
+    fogNear: fog.near,
+    fogFar: fog.far,
+    fogDensity: fog.density,
+    fogColor: [fog.color.x, fog.color.y, fog.color.z],
+    fogHeightFalloff: fog.heightFalloff,
+    letterboxBars: [
+      letterbox.top / canvas.height,
+      letterbox.bottom / canvas.height,
+      letterbox.left / canvas.width,
+      letterbox.right / canvas.width,
+    ],
+  });
 
   device.queue.writeBuffer(cube.uniformBuffer, 0, uniformData);
 

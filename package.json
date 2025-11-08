@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run validate-shaders && tsc && vite build",
     "preview": "vite preview",
     "prebuild": "tsx scripts/generate-shader-constants.ts",
+    "validate-shaders": "tsx scripts/validate-shaders.ts",
+    "predev": "npm run validate-shaders",
     "test": "vitest",
     "lint": "eslint src --ext ts,tsx",
     "type-check": "tsc --noEmit"
