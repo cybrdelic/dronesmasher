@@ -85,6 +85,9 @@ export const Viewport3DEnhanced: React.FC = () => {
         camera.lookAt(new Vec3(5, 4, 8), Vec3.zero(), Vec3.up());
         cameraRef.current = camera;
 
+        // Initialize lastFrameTime to prevent huge first deltaTime
+        lastFrameTimeRef.current = performance.now();
+
         // Create camera controller
         const controller = new CameraController({
           camera,
@@ -103,7 +106,6 @@ export const Viewport3DEnhanced: React.FC = () => {
         setStatus('Ready - Cinematic Mode Active');
 
         // Start render loop
-        lastFrameTimeRef.current = performance.now();
         render();
       } catch (error) {
         Logger.error('Failed to initialize viewport', error);
@@ -202,7 +204,11 @@ export const Viewport3DEnhanced: React.FC = () => {
     }
 
     const now = performance.now();
-    const deltaTime = (now - lastFrameTimeRef.current) / 1000;
+    let deltaTime = (now - lastFrameTimeRef.current) / 1000;
+
+    // Clamp deltaTime to prevent huge spikes (e.g., first frame or tab switching)
+    deltaTime = Math.min(deltaTime, 0.1); // Max 100ms
+
     lastFrameTimeRef.current = now;
 
     // Update cinematic sequence (if playing)

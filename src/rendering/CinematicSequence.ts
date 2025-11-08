@@ -114,29 +114,29 @@ export const CINEMATIC_SEQUENCES: Record<string, SequenceConfig> = {
 
   DOLLY_ZOOM: {
     name: 'Dolly Zoom (Vertigo Effect)',
-    duration: 4.0,
+    duration: 5.0,
     loop: false,
     keyframes: [
       {
         time: 0.0,
-        position: new Vec3(0, 2, 12),
+        position: new Vec3(0, 2, 15),
         lookTarget: Vec3.zero(),
-        fov: 40,
+        fov: 25, // Wide angle at distance
+        easing: EasingType.EASE_IN_OUT,
+      },
+      {
+        time: 2.5,
+        position: new Vec3(0, 2, 8),
+        lookTarget: Vec3.zero(),
+        fov: 45, // Medium FOV at medium distance
         easing: EasingType.LINEAR,
       },
       {
-        time: 2.0,
-        position: new Vec3(0, 2, 6),
+        time: 5.0,
+        position: new Vec3(0, 2, 4),
         lookTarget: Vec3.zero(),
-        fov: 70,
-        easing: EasingType.LINEAR,
-      },
-      {
-        time: 4.0,
-        position: new Vec3(0, 2, 3),
-        lookTarget: Vec3.zero(),
-        fov: 90,
-        easing: EasingType.LINEAR,
+        fov: 75, // Telephoto close up - keeps subject same size
+        easing: EasingType.EASE_IN_OUT,
       },
     ],
   },
@@ -317,9 +317,9 @@ export class CinematicSequence {
       const fov = this.lerp(prevKeyframe.fov, nextKeyframe.fov, easedT);
       this.camera.setPerspective(
         fov,
-        this.camera.getProjectionMatrix().toArray()[0], // Maintain current aspect
-        0.1,
-        100
+        this.camera.getAspect(), // Maintain current aspect ratio
+        this.camera.getNear(),
+        this.camera.getFar()
       );
     }
 

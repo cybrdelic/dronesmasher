@@ -99,6 +99,22 @@ export class Camera {
     this.needsUpdate = true;
   }
 
+  getAspect(): number {
+    return this.aspect;
+  }
+
+  getFovDegrees(): number {
+    return this.fovRad * 180 / Math.PI;
+  }
+
+  getNear(): number {
+    return this.near;
+  }
+
+  getFar(): number {
+    return this.far;
+  }
+
   // Matrix getters (auto-update if needed)
   getViewMatrix(): Mat4 {
     if (this.needsUpdate) this.updateMatrices();
