@@ -2,6 +2,9 @@
  * WebGPU device initialization and management
  */
 
+import { Logger } from '../utils/Logger';
+import { ErrorManager } from '../utils/ErrorManager';
+
 export interface WebGPUContextOptions {
   canvas?: HTMLCanvasElement;
   powerPreference?: 'low-power' | 'high-performance';
@@ -44,11 +47,10 @@ export class WebGPUContext {
       throw new Error('Failed to get WebGPU adapter');
     }
 
-    console.log('WebGPU Adapter:', {
+    Logger.info('WebGPU Adapter initialized', {
       vendor: adapter.info?.vendor ?? 'unknown',
       architecture: adapter.info?.architecture ?? 'unknown',
       device: adapter.info?.device ?? 'unknown',
-      limits: adapter.limits
     });
 
     // Request device
@@ -61,11 +63,14 @@ export class WebGPUContext {
     });
 
     device.lost.then((info) => {
-      console.error('WebGPU device lost:', info.message, info.reason);
+      ErrorManager.handleDeviceLost(info);
+      Logger.error('WebGPU device lost', { reason: info.reason, message: info.message });
     });
 
     device.addEventListener('uncapturederror', (event) => {
-      console.error('WebGPU uncaptured error:', event.error);
+      if (event.error) {
+        ErrorManager.handleWebGPUError(event.error);
+      }
     });
 
     // Set up canvas context if provided
@@ -87,7 +92,7 @@ export class WebGPUContext {
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
       });
 
-      console.log('Canvas configured with format:', presentationFormat);
+      Logger.info('Canvas configured', { format: presentationFormat });
     }
 
     return new WebGPUContext(adapter, device, context, presentationFormat, options.canvas);

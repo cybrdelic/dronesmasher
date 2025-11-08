@@ -3,6 +3,8 @@
  * Prevents resource leaks and validates usage
  */
 
+import { Logger } from '../utils/Logger';
+
 export interface BufferDescriptor {
   label: string;
   size: number;
@@ -31,7 +33,7 @@ export class ResourceManager {
   // Buffer management
   createBuffer(descriptor: BufferDescriptor): GPUBuffer {
     if (this.buffers.has(descriptor.label)) {
-      console.warn(`Buffer ${descriptor.label} already exists, destroying old one`);
+      Logger.warn(`Buffer ${descriptor.label} already exists, destroying old one`);
       this.destroyBuffer(descriptor.label);
     }
 
@@ -47,7 +49,7 @@ export class ResourceManager {
       this.trackInScene(descriptor.scene, descriptor.label);
     }
 
-    console.log(`Created buffer: ${descriptor.label} (${descriptor.size} bytes)`);
+    Logger.debug(`Created buffer: ${descriptor.label}`, { size: descriptor.size });
     return buffer;
   }
 
@@ -60,7 +62,7 @@ export class ResourceManager {
     if (buffer) {
       buffer.destroy();
       this.buffers.delete(label);
-      console.log(`Destroyed buffer: ${label}`);
+      Logger.debug(`Destroyed buffer: ${label}`);
       return true;
     }
     return false;
@@ -69,7 +71,7 @@ export class ResourceManager {
   // Texture management
   createTexture(descriptor: TextureDescriptor): GPUTexture {
     if (this.textures.has(descriptor.label)) {
-      console.warn(`Texture ${descriptor.label} already exists, destroying old one`);
+      Logger.warn(`Texture ${descriptor.label} already exists, destroying old one`);
       this.destroyTexture(descriptor.label);
     }
 
@@ -86,7 +88,7 @@ export class ResourceManager {
       this.trackInScene(descriptor.scene, descriptor.label);
     }
 
-    console.log(`Created texture: ${descriptor.label}`);
+    Logger.debug(`Created texture: ${descriptor.label}`);
     return texture;
   }
 
@@ -99,7 +101,7 @@ export class ResourceManager {
     if (texture) {
       texture.destroy();
       this.textures.delete(label);
-      console.log(`Destroyed texture: ${label}`);
+      Logger.debug(`Destroyed texture: ${label}`);
       return true;
     }
     return false;
@@ -125,47 +127,48 @@ export class ResourceManager {
     }
 
     this.scenes.delete(scene);
-    console.log(`Cleaned up ${cleanedCount} resources from scene: ${scene}`);
+    Logger.info(`Cleaned up scene: ${scene}`, { resourceCount: cleanedCount });
   }
 
   cleanupAll() {
+    const bufferCount = this.buffers.size;
+    const textureCount = this.textures.size;
+
     for (const [label, buffer] of this.buffers) {
       buffer.destroy();
-      console.log(`Destroyed buffer: ${label}`);
+      Logger.debug(`Destroyed buffer: ${label}`);
     }
     this.buffers.clear();
 
     for (const [label, texture] of this.textures) {
       texture.destroy();
-      console.log(`Destroyed texture: ${label}`);
+      Logger.debug(`Destroyed texture: ${label}`);
     }
     this.textures.clear();
 
     this.scenes.clear();
-    console.log('Cleaned up all resources');
+    Logger.info('Cleaned up all resources', { buffers: bufferCount, textures: textureCount });
   }
 
   // Reporting
   reportLeaks() {
-    console.group('GPU Resource Report');
-    console.log(`Active buffers: ${this.buffers.size}`);
-    console.log(`Active textures: ${this.textures.size}`);
-
-    if (this.buffers.size > 0) {
-      console.log('Buffers:');
-      for (const [label, buffer] of this.buffers) {
-        console.log(`  - ${label}: ${buffer.size} bytes`);
-      }
+    if (this.buffers.size === 0 && this.textures.size === 0) {
+      Logger.info('GPU Resource Report: No leaks detected');
+      return;
     }
 
-    if (this.textures.size > 0) {
-      console.log('Textures:');
-      for (const label of this.textures.keys()) {
-        console.log(`  - ${label}`);
-      }
+    Logger.warn('GPU Resource Report - Potential leaks', {
+      buffers: this.buffers.size,
+      textures: this.textures.size
+    });
+
+    for (const [label, buffer] of this.buffers) {
+      Logger.warn(`Leaked buffer: ${label}`, { size: buffer.size });
     }
 
-    console.groupEnd();
+    for (const label of this.textures.keys()) {
+      Logger.warn(`Leaked texture: ${label}`);
+    }
   }
 
   // Get total memory usage estimate

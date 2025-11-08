@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { WebGPUContext } from '../core/WebGPUContext';
 import { Camera } from '../spatial/Camera';
 import { Vec3 } from '../math/Vec3';
+import { Logger } from '../utils/Logger';
+import { ErrorManager } from '../utils/ErrorManager';
 
 export const Viewport3D: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -19,6 +21,7 @@ export const Viewport3D: React.FC = () => {
     async function init() {
       try {
         // Initialize WebGPU
+        Logger.info('Initializing WebGPU...');
         gpuCtx = await WebGPUContext.initialize({ canvas: canvas! });
         setGpuContext(gpuCtx);
 
@@ -36,13 +39,16 @@ export const Viewport3D: React.FC = () => {
           Vec3.up()
         );
 
+        Logger.info('WebGPU initialized successfully');
         setStatus('Ready');
 
         // Start render loop
         render();
       } catch (error) {
-        console.error('Failed to initialize WebGPU:', error);
-        setStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        Logger.error('Failed to initialize WebGPU', error);
+        ErrorManager.addError('runtime', 'WebGPU Initialization Failed', message);
+        setStatus(`Error: ${message}`);
       }
     }
 
