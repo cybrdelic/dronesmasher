@@ -24,6 +24,12 @@ export const Viewport3D: React.FC = () => {
       return;
     }
 
+    // CRITICAL: Set flag IMMEDIATELY (synchronously) to prevent race condition
+    // If we wait until async init() finishes, StrictMode's second mount will
+    // start a second initialization before the first one completes
+    canvas.dataset.webgpuInitialized = 'true';
+    Logger.debug('Marked canvas as initializing to prevent concurrent initialization');
+
     async function init() {
       try {
         // Set canvas size FIRST
@@ -36,9 +42,6 @@ export const Viewport3D: React.FC = () => {
         Logger.info('Initializing WebGPU...');
         const gpuCtx = await WebGPUContext.initialize({ canvas });
         gpuContextRef.current = gpuCtx;
-
-        // Mark canvas as initialized (prevents StrictMode double-init)
-        canvas.dataset.webgpuInitialized = 'true';
 
         // Create camera
         const camera = new Camera({
@@ -65,6 +68,9 @@ export const Viewport3D: React.FC = () => {
         Logger.error('Failed to initialize WebGPU', error);
         ErrorManager.addError('runtime', 'WebGPU Initialization Failed', message);
         setStatus(`Error: ${message}`);
+
+        // Clear flag on error so initialization can be retried
+        delete canvas.dataset.webgpuInitialized;
       }
     }
 
