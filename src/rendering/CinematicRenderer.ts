@@ -58,6 +58,10 @@ export class CinematicRenderer {
     return { ...this.settings };
   }
 
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
   setAspectRatio(ratio: AspectRatio): void {
     this.settings.aspectRatio = ratio;
   }
@@ -178,7 +182,7 @@ export class CinematicRenderer {
     return data;
   }
 
-  private getColorGradeId(): number {
+  getColorGradeId(): number {
     switch (this.settings.colorGrading) {
       case ColorGrade.NEUTRAL:
         return 0.0;
