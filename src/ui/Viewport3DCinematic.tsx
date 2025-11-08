@@ -386,29 +386,22 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   });
   device.queue.writeBuffer(indexBuffer, 0, indices);
 
-  // Large uniform buffer for all cinematic data
-  // 136 floats * 4 bytes = 544 bytes (aligned for WebGPU)
+  // Uniform buffer for test_cube shader
+  // 80 floats * 4 bytes = 320 bytes (will expand when advanced shader is ready)
   const uniformBuffer = device.createBuffer({
-    size: 544,
+    size: 320,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  // Load advanced cinematic shader
-  Logger.debug('Loading cinematic shader...');
-  let shaderCode: string;
-  try {
-    const shaderResponse = await fetch('/src/shaders/cinematic_advanced.wgsl');
-    if (!shaderResponse.ok) {
-      throw new Error(`Failed to load shader: ${shaderResponse.status}`);
-    }
-    shaderCode = await shaderResponse.text();
-    Logger.debug('Shader loaded, length:', shaderCode.length);
-  } catch (error) {
-    Logger.error('Failed to load cinematic shader, falling back to test_cube shader', error);
-    // Fallback to the working shader
-    const fallbackResponse = await fetch('/src/shaders/test_cube.wgsl');
-    shaderCode = await fallbackResponse.text();
-  }
+  // TEMPORARY: Use working shader while debugging advanced shader
+  Logger.debug('Loading shader (using test_cube temporarily)...');
+  const shaderResponse = await fetch('/src/shaders/test_cube.wgsl');
+  const shaderCode = await shaderResponse.text();
+  Logger.debug('Shader loaded, length:', shaderCode.length);
+
+  // TODO: Switch back to cinematic_advanced.wgsl after fixing alignment issues
+  // const shaderResponse = await fetch('/src/shaders/cinematic_advanced.wgsl');
+  // shaderCode = await shaderResponse.text();
 
   const shaderModule = device.createShaderModule({ code: shaderCode });
 
@@ -496,31 +489,41 @@ function renderFrame(
   const normalMatrix = model.inverse() ?? Mat4.identity();
   const cameraPos = camera.getPosition();
 
-  // Pack all uniform data (136 floats = 544 bytes for WebGPU alignment)
-  const uniformData = new Float32Array(136);
+  // Pack uniforms for test_cube shader (80 floats = 320 bytes)
+  // TODO: Expand when switching back to advanced shader
+  const uniformData = new Float32Array(80);
 
   // Matrices (0-47)
-  uniformData.set(mvp.toArray(), 0);
-  uniformData.set(model.toArray(), 16);
-  uniformData.set(normalMatrix.toArray(), 32);
+  uniformData.set(mvp.toArray(), 0);              // 0-15: MVP matrix
+  uniformData.set(model.toArray(), 16);           // 16-31: Model matrix
+  uniformData.set(normalMatrix.toArray(), 32);    // 32-47: Normal matrix
 
-  // Camera position and time (48-51)
-  uniformData[48] = cameraPos.x;
-  uniformData[49] = cameraPos.y;
-  uniformData[50] = cameraPos.z;
-  uniformData[51] = time;
+  // Lighting from system (48-59)
+  const lights = systems.lighting.getAllLights();
+  const mainLight = lights[0] || {
+    direction: new Vec3(0.5, -0.7, 0.3).normalize(),
+    color: new Vec3(1.2, 1.1, 1.0),
+    intensity: 1.0,
+  };
+  const ambient = systems.lighting.getAmbient();
 
-  // Lighting data (52-95)
-  const lightingData = systems.lighting.packLightingData();
-  uniformData.set(lightingData, 52);
+  uniformData.set([mainLight.direction.x, mainLight.direction.y, mainLight.direction.z, 0], 48);
+  uniformData.set([
+    mainLight.color.x * mainLight.intensity,
+    mainLight.color.y * mainLight.intensity,
+    mainLight.color.z * mainLight.intensity,
+    0
+  ], 52);
+  uniformData.set([ambient.x, ambient.y, ambient.z, 0], 56);
 
-  // Cinematic settings (96-111)
-  const cinematicData = systems.cinematic.packSettingsData();
-  uniformData.set(cinematicData, 96);
+  // Camera position and time (60-63)
+  uniformData.set([cameraPos.x, cameraPos.y, cameraPos.z, time * 0.001], 60);
 
-  // Atmospheric effects (112-127)
-  const atmosphericData = systems.atmosphere.packAtmosphericData();
-  uniformData.set(atmosphericData, 112);
+  // Post-processing effects (64-67) - all enabled for now
+  uniformData[64] = 1.0; // bloom
+  uniformData[65] = 1.0; // filmGrain
+  uniformData[66] = systems.cinematic.getSettings().vignetteStrength;
+  uniformData[67] = systems.cinematic.getSettings().chromaticAberration;
 
   device.queue.writeBuffer(cube.uniformBuffer, 0, uniformData);
 
