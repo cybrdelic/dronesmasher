@@ -85,6 +85,16 @@ export class WebGPUContext {
 
       presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 
+      // CRITICAL: Unconfigure first to clear any existing device association
+      // This prevents texture/device mismatch during hot reload
+      try {
+        context.unconfigure();
+        Logger.debug('Unconfigured existing canvas context');
+      } catch (e) {
+        // Context might not be configured yet, that's fine
+        Logger.debug('No existing canvas configuration to clear');
+      }
+
       context.configure({
         device,
         format: presentationFormat,
@@ -128,6 +138,20 @@ export class WebGPUContext {
 
   // Cleanup
   destroy() {
+    Logger.debug('Destroying WebGPU context');
+
+    // Unconfigure canvas context first to break device association
+    if (this.context) {
+      try {
+        this.context.unconfigure();
+        Logger.debug('Canvas context unconfigured');
+      } catch (e) {
+        Logger.warn('Failed to unconfigure canvas context', e);
+      }
+    }
+
+    // Then destroy the device
     this.device.destroy();
+    Logger.debug('Device destroyed');
   }
 }
