@@ -440,7 +440,7 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
     },
     primitive: {
       topology: 'triangle-list',
-      cullMode: 'back',
+      cullMode: 'none', // Disabled due to winding order issues
     },
     depthStencil: {
       depthWriteEnabled: true,
