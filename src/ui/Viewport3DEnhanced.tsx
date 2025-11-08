@@ -309,11 +309,11 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
 
   const indices = new Uint32Array([
     0, 1, 2, 0, 2, 3, // Front
-    4, 6, 5, 4, 7, 6, // Back
+    4, 5, 6, 4, 6, 7, // Back (fixed winding)
     8, 9, 10, 8, 10, 11, // Top
-    12, 14, 13, 12, 15, 14, // Bottom
+    12, 13, 14, 12, 14, 15, // Bottom (fixed winding)
     16, 17, 18, 16, 18, 19, // Right
-    20, 22, 21, 20, 23, 22, // Left
+    20, 21, 22, 20, 22, 23, // Left (fixed winding)
   ]);
 
   const vertexBuffer = device.createBuffer({
