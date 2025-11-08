@@ -375,21 +375,24 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   ]);
 
   const vertexBuffer = device.createBuffer({
+    label: 'Cube Vertex Buffer',
     size: vertices.byteLength,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(vertexBuffer, 0, vertices);
 
   const indexBuffer = device.createBuffer({
+    label: 'Cube Index Buffer',
     size: indices.byteLength,
     usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(indexBuffer, 0, indices);
 
   // Uniform buffer for Houdini-level cinematic shader
-  // 96 floats * 4 bytes = 384 bytes (WebGPU aligned)
+  // WebGPU reports 400 bytes minimum, use 416 (104 floats) for safety
   const uniformBuffer = device.createBuffer({
-    size: 384,
+    label: 'Cinematic Uniform Buffer (416 bytes)',
+    size: 416,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
@@ -399,22 +402,36 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   const shaderCode = await shaderResponse.text();
   Logger.info('Shader loaded, length:', shaderCode.length);
 
-  const shaderModule = device.createShaderModule({ code: shaderCode });
+  const shaderModule = device.createShaderModule({
+    code: shaderCode,
+    label: 'Cinematic Houdini Shader'
+  });
 
-  // Check for shader compilation errors
+  // Check for shader compilation errors/warnings
   const compilationInfo = await shaderModule.getCompilationInfo();
   if (compilationInfo.messages.length > 0) {
+    let hasErrors = false;
     for (const msg of compilationInfo.messages) {
       if (msg.type === 'error') {
-        Logger.error(`Shader error at line ${msg.lineNum}: ${msg.message}`);
+        Logger.error(`[Shader Compilation Error] Line ${msg.lineNum}: ${msg.message}`);
+        hasErrors = true;
       } else if (msg.type === 'warning') {
-        Logger.warn(`Shader warning at line ${msg.lineNum}: ${msg.message}`);
+        Logger.warn(`[Shader Warning] Line ${msg.lineNum}: ${msg.message}`);
+      } else {
+        Logger.info(`[Shader Info] Line ${msg.lineNum}: ${msg.message}`);
       }
     }
+    if (hasErrors) {
+      throw new Error('Shader compilation failed - check console for details');
+    }
+  } else {
+    Logger.info('Shader compiled successfully');
   }
 
   // Create pipeline
+  Logger.info('Creating render pipeline...');
   const pipeline = device.createRenderPipeline({
+    label: 'Cinematic Render Pipeline',
     layout: 'auto',
     vertex: {
       module: shaderModule,
@@ -446,9 +463,12 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   });
 
   const bindGroup = device.createBindGroup({
+    label: 'Cinematic Bind Group',
     layout: pipeline.getBindGroupLayout(0),
     entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
   });
+
+  Logger.info('Cinematic cube resources created successfully');
 
   return {
     pipeline,
@@ -485,8 +505,8 @@ function renderFrame(
   const normalMatrix = model.inverse() ?? Mat4.identity();
   const cameraPos = camera.getPosition();
 
-  // Pack uniforms for Houdini-level shader (96 floats = 384 bytes)
-  const uniformData = new Float32Array(96);
+  // Pack uniforms for Houdini-level shader (104 floats = 416 bytes)
+  const uniformData = new Float32Array(104);
 
   // Matrices (0-47)
   uniformData.set(mvp.toArray(), 0);              // 0-15: MVP matrix
