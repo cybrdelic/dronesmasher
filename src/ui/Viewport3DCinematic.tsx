@@ -394,9 +394,35 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   });
 
   // Load advanced cinematic shader
-  const shaderResponse = await fetch('/src/shaders/cinematic_advanced.wgsl');
-  const shaderCode = await shaderResponse.text();
+  Logger.debug('Loading cinematic shader...');
+  let shaderCode: string;
+  try {
+    const shaderResponse = await fetch('/src/shaders/cinematic_advanced.wgsl');
+    if (!shaderResponse.ok) {
+      throw new Error(`Failed to load shader: ${shaderResponse.status}`);
+    }
+    shaderCode = await shaderResponse.text();
+    Logger.debug('Shader loaded, length:', shaderCode.length);
+  } catch (error) {
+    Logger.error('Failed to load cinematic shader, falling back to test_cube shader', error);
+    // Fallback to the working shader
+    const fallbackResponse = await fetch('/src/shaders/test_cube.wgsl');
+    shaderCode = await fallbackResponse.text();
+  }
+
   const shaderModule = device.createShaderModule({ code: shaderCode });
+
+  // Check for shader compilation errors
+  const compilationInfo = await shaderModule.getCompilationInfo();
+  if (compilationInfo.messages.length > 0) {
+    for (const msg of compilationInfo.messages) {
+      if (msg.type === 'error') {
+        Logger.error(`Shader error at line ${msg.lineNum}: ${msg.message}`);
+      } else if (msg.type === 'warning') {
+        Logger.warn(`Shader warning at line ${msg.lineNum}: ${msg.message}`);
+      }
+    }
+  }
 
   // Create pipeline
   const pipeline = device.createRenderPipeline({
@@ -499,35 +525,39 @@ function renderFrame(
   device.queue.writeBuffer(cube.uniformBuffer, 0, uniformData);
 
   // Render
-  const commandEncoder = device.createCommandEncoder();
-  const textureView = context.getCurrentTexture().createView();
+  try {
+    const commandEncoder = device.createCommandEncoder();
+    const textureView = context.getCurrentTexture().createView();
 
-  const renderPass = commandEncoder.beginRenderPass({
-    colorAttachments: [
-      {
-        view: textureView,
-        clearValue: { r: 0.01, g: 0.01, b: 0.02, a: 1.0 },
-        loadOp: 'clear',
-        storeOp: 'store',
+    const renderPass = commandEncoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: textureView,
+          clearValue: { r: 0.01, g: 0.01, b: 0.02, a: 1.0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+      depthStencilAttachment: {
+        view: gpuCtx.resourceManager.getOrCreateDepthTexture(
+          context.getCurrentTexture().width,
+          context.getCurrentTexture().height
+        ).createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
       },
-    ],
-    depthStencilAttachment: {
-      view: gpuCtx.resourceManager.getOrCreateDepthTexture(
-        context.getCurrentTexture().width,
-        context.getCurrentTexture().height
-      ).createView(),
-      depthClearValue: 1.0,
-      depthLoadOp: 'clear',
-      depthStoreOp: 'store',
-    },
-  });
+    });
 
-  renderPass.setPipeline(cube.pipeline);
-  renderPass.setBindGroup(0, cube.bindGroup);
-  renderPass.setVertexBuffer(0, cube.vertexBuffer);
-  renderPass.setIndexBuffer(cube.indexBuffer, 'uint32');
-  renderPass.drawIndexed(cube.indexCount);
-  renderPass.end();
+    renderPass.setPipeline(cube.pipeline);
+    renderPass.setBindGroup(0, cube.bindGroup);
+    renderPass.setVertexBuffer(0, cube.vertexBuffer);
+    renderPass.setIndexBuffer(cube.indexBuffer, 'uint32');
+    renderPass.drawIndexed(cube.indexCount);
+    renderPass.end();
 
-  device.queue.submit([commandEncoder.finish()]);
+    device.queue.submit([commandEncoder.finish()]);
+  } catch (error) {
+    Logger.error('Render error:', error);
+  }
 }
