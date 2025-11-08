@@ -95,6 +95,40 @@ export class Mat4 {
     return new Mat4(m);
   }
 
+  static fromQuaternion(q: { x: number; y: number; z: number; w: number }): Mat4 {
+    const x2 = q.x + q.x;
+    const y2 = q.y + q.y;
+    const z2 = q.z + q.z;
+    const xx = q.x * x2;
+    const xy = q.x * y2;
+    const xz = q.x * z2;
+    const yy = q.y * y2;
+    const yz = q.y * z2;
+    const zz = q.z * z2;
+    const wx = q.w * x2;
+    const wy = q.w * y2;
+    const wz = q.w * z2;
+
+    const m = new Float32Array(16);
+    m[0] = 1 - (yy + zz);
+    m[1] = xy + wz;
+    m[2] = xz - wy;
+    m[3] = 0;
+    m[4] = xy - wz;
+    m[5] = 1 - (xx + zz);
+    m[6] = yz + wx;
+    m[7] = 0;
+    m[8] = xz + wy;
+    m[9] = yz - wx;
+    m[10] = 1 - (xx + yy);
+    m[11] = 0;
+    m[12] = 0;
+    m[13] = 0;
+    m[14] = 0;
+    m[15] = 1;
+    return new Mat4(m);
+  }
+
   // Camera matrices
   static lookAt(eye: Vec3, target: Vec3, up: Vec3): Mat4 {
     const z = eye.sub(target).normalize();

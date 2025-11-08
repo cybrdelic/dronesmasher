@@ -199,7 +199,7 @@ export class CameraController {
     if (mode === CameraMode.DRONE_FPV) {
       this.dronePosition = new Vec3(0, 2, 5);
       this.dronePitch = 0;
-      this.droneYaw = 0;
+      this.droneYaw = Math.PI; // Look toward cube (negative Z direction)
     }
   }
 
