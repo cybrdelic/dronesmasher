@@ -237,7 +237,7 @@ export const Viewport3DEnhanced: React.FC = () => {
     }
 
     // Render
-    renderFrame(gpuCtx, camera, cube, rotationRef.current);
+    renderFrame(gpuCtx, camera, cube, rotationRef.current, effects, now);
 
     animationFrameRef.current = requestAnimationFrame(render);
   }
@@ -329,7 +329,7 @@ async function createCubeResources(gpuCtx: WebGPUContext): Promise<CubeResources
   device.queue.writeBuffer(indexBuffer, 0, indices);
 
   const uniformBuffer = device.createBuffer({
-    size: 256,
+    size: 320, // Expanded for post-processing uniforms (80 floats * 4 bytes)
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
@@ -390,7 +390,9 @@ function renderFrame(
   gpuCtx: WebGPUContext,
   camera: Camera,
   cube: CubeResources,
-  rotation: number
+  rotation: number,
+  effects: { bloom: boolean; filmGrain: boolean; vignette: boolean; chromaticAberration: boolean },
+  time: number
 ) {
   const device = gpuCtx.device;
   const context = gpuCtx.context!;
@@ -410,14 +412,20 @@ function renderFrame(
   const ambientColor = new Vec3(0.15, 0.2, 0.25); // Cool ambient
   const cameraPos = camera.getPosition();
 
-  const uniformData = new Float32Array(64);
-  uniformData.set(mvp.toArray(), 0);
-  uniformData.set(model.toArray(), 16);
-  uniformData.set(normalMatrix.toArray(), 32);
+  // Pack uniforms with post-processing controls (expanded buffer)
+  const uniformData = new Float32Array(80); // Expanded for post-processing
+  uniformData.set(mvp.toArray(), 0);              // 0-15: MVP matrix
+  uniformData.set(model.toArray(), 16);           // 16-31: Model matrix
+  uniformData.set(normalMatrix.toArray(), 32);    // 32-47: Normal matrix
   uniformData.set([lightDir.x, lightDir.y, lightDir.z, 0], 48);
   uniformData.set([lightColor.x, lightColor.y, lightColor.z, 0], 52);
   uniformData.set([ambientColor.x, ambientColor.y, ambientColor.z, 0], 56);
-  uniformData.set([cameraPos.x, cameraPos.y, cameraPos.z, 0], 60);
+  uniformData.set([cameraPos.x, cameraPos.y, cameraPos.z, time], 60); // time in w component
+  // Post-processing controls at 64
+  uniformData[64] = effects.bloom ? 1.0 : 0.0;
+  uniformData[65] = effects.filmGrain ? 1.0 : 0.0;
+  uniformData[66] = effects.vignette ? 1.0 : 0.0;
+  uniformData[67] = effects.chromaticAberration ? 1.0 : 0.0;
 
   device.queue.writeBuffer(cube.uniformBuffer, 0, uniformData);
 
