@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { WebGPUContext } from '../core/WebGPUContext';
 import { Camera } from '../spatial/Camera';
+import { CameraController, CameraMode } from '../rendering/CameraController';
 import { Vec3 } from '../math/Vec3';
 import { Mat4 } from '../math/Mat4';
 import { Logger } from '../utils/Logger';
@@ -20,10 +21,13 @@ export const Viewport3D: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gpuContextRef = useRef<WebGPUContext | null>(null);
   const cameraRef = useRef<Camera | null>(null);
+  const cameraControllerRef = useRef<CameraController | null>(null);
   const cubeRef = useRef<CubeResources | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const lastFrameTimeRef = useRef<number>(0);
   const rotationRef = useRef<number>(0);
   const [status, setStatus] = useState<string>('Initializing...');
+  const [cameraMode, setCameraMode] = useState<string>('free');
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -71,13 +75,25 @@ export const Viewport3D: React.FC = () => {
         );
         cameraRef.current = camera;
 
+        // Create camera controller
+        const controller = new CameraController({
+          camera,
+          canvas,
+          mode: CameraMode.FREE
+        });
+        cameraControllerRef.current = controller;
+
+        // Set canvas cursor
+        canvas.style.cursor = 'grab';
+
         // Create cube rendering resources
         cubeRef.current = await createCubeResources(gpuCtx);
 
         Logger.info('WebGPU initialized successfully');
-        setStatus('Ready - Rendering 3D Cube');
+        setStatus('Ready - Cinematic Controls Active');
 
         // Start render loop
+        lastFrameTimeRef.current = performance.now();
         render();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -151,10 +167,11 @@ export const Viewport3D: React.FC = () => {
       });
       gpuCtx.device.queue.writeBuffer(indexBuffer, 0, indices);
 
-      // Create uniform buffer for MVP matrix
+      // Create uniform buffer - now much larger for lighting data
+      // MVP (64) + Model (64) + Normal (64) + Light Dir (16) + Light Color (16) + Ambient (16) + Camera Pos (16) = 256 bytes
       const uniformBuffer = gpuCtx.device.createBuffer({
         label: 'cube-uniforms',
-        size: 64, // mat4x4 = 16 floats = 64 bytes
+        size: 256,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
 
@@ -198,15 +215,6 @@ export const Viewport3D: React.FC = () => {
         },
       });
 
-      // Create depth texture (not used in initial setup, created per-frame instead)
-      // We'll create this dynamically in the render loop to handle resizing
-      const canvasEl = gpuCtx.canvas!;
-      const depthTexture = gpuCtx.device.createTexture({
-        size: [canvasEl.width, canvasEl.height],
-        format: 'depth24plus',
-        usage: GPUTextureUsage.RENDER_ATTACHMENT,
-      });
-
       // Create bind group
       const bindGroup = gpuCtx.device.createBindGroup({
         label: 'cube-bind-group',
@@ -216,9 +224,6 @@ export const Viewport3D: React.FC = () => {
           resource: { buffer: uniformBuffer },
         }],
       });
-
-      // Store depth texture for cleanup
-      (depthTexture as any).label = 'cube-depth-texture';
 
       return {
         pipeline,
@@ -233,18 +238,37 @@ export const Viewport3D: React.FC = () => {
     function render() {
       const gpuCtx = gpuContextRef.current;
       const camera = cameraRef.current;
+      const controller = cameraControllerRef.current;
       const cube = cubeRef.current;
 
-      if (!gpuCtx || !camera || !cube) {
+      if (!gpuCtx || !camera || !controller || !cube) {
         animationFrameRef.current = requestAnimationFrame(render);
         return;
       }
 
       try {
-        // Update rotation
+        // Calculate delta time
+        const now = performance.now();
+        const deltaTime = (now - lastFrameTimeRef.current) / 1000; // Convert to seconds
+        lastFrameTimeRef.current = now;
+
+        // Update camera controller
+        controller.update(deltaTime);
+
+        // Update camera mode display
+        const newMode = controller.getMode();
+        const modeNames: Record<CameraMode, string> = {
+          [CameraMode.FREE]: 'Free Orbit (Drag to rotate, Shift+Drag to pan, Scroll to zoom)',
+          [CameraMode.ORBIT]: 'Locked Orbit',
+          [CameraMode.DRONE_FPV]: 'Drone FPV (WASD to move, QE up/down, Mouse to look)',
+          [CameraMode.CINEMATIC]: 'Cinematic Fly-Through'
+        };
+        setCameraMode(modeNames[newMode]);
+
+        // Update rotation for spinning cube
         rotationRef.current += 0.01;
 
-        // Compute MVP matrix - combine rotation matrices
+        // Compute matrices
         const rotY = Mat4.rotationY(rotationRef.current);
         const rotX = Mat4.rotationX(rotationRef.current * 0.7);
         const model = rotY.mul(rotX);
@@ -253,11 +277,51 @@ export const Viewport3D: React.FC = () => {
         const projection = camera.getProjectionMatrix();
         const mvp = projection.mul(view).mul(model);
 
+        // Normal matrix (inverse transpose of model matrix for non-uniform scaling)
+        const normalMatrix = model; // For uniform scaling, model matrix is fine
+
+        // Lighting parameters (cinematic 3-point lighting inspired)
+        const lightDir = new Vec3(0.5, -0.7, 0.3).normalize(); // Key light from upper-right
+        const lightColor = new Vec3(1.0, 0.95, 0.9); // Warm sunlight
+        const ambientColor = new Vec3(0.2, 0.25, 0.3); // Cool ambient (blue-ish)
+        const cameraPos = camera.getPosition();
+
+        // Pack uniform data
+        const uniformData = new Float32Array(64); // 256 bytes / 4 = 64 floats
+        let offset = 0;
+
+        // MVP matrix (16 floats)
+        uniformData.set(mvp.toArray(), offset);
+        offset += 16;
+
+        // Model matrix (16 floats)
+        uniformData.set(model.toArray(), offset);
+        offset += 16;
+
+        // Normal matrix (16 floats)
+        uniformData.set(normalMatrix.toArray(), offset);
+        offset += 16;
+
+        // Light direction (vec3 + padding)
+        uniformData.set([lightDir.x, lightDir.y, lightDir.z, 0], offset);
+        offset += 4;
+
+        // Light color (vec3 + padding)
+        uniformData.set([lightColor.x, lightColor.y, lightColor.z, 0], offset);
+        offset += 4;
+
+        // Ambient color (vec3 + padding)
+        uniformData.set([ambientColor.x, ambientColor.y, ambientColor.z, 0], offset);
+        offset += 4;
+
+        // Camera position (vec3 + padding)
+        uniformData.set([cameraPos.x, cameraPos.y, cameraPos.z, 0], offset);
+
         // Update uniform buffer
         gpuCtx.device.queue.writeBuffer(
           cube.uniformBuffer,
           0,
-          new Float32Array(mvp.toArray())
+          uniformData
         );
 
         // Get current canvas texture
@@ -270,19 +334,19 @@ export const Viewport3D: React.FC = () => {
         // Create command encoder
         const encoder = gpuCtx.createCommandEncoder('frame');
 
-        // Get or create depth texture
-        const canvas = gpuCtx.canvas!;
+        // Create depth texture
+        const canvasEl = gpuCtx.canvas!;
         const depthTexture = gpuCtx.device.createTexture({
-          size: [canvas.width, canvas.height],
+          size: [canvasEl.width, canvasEl.height],
           format: 'depth24plus',
           usage: GPUTextureUsage.RENDER_ATTACHMENT,
         });
 
-        // Render pass with depth testing
+        // Render pass with cinematic background
         const renderPass = encoder.beginRenderPass({
           colorAttachments: [{
             view: texture.createView(),
-            clearValue: { r: 0.1, g: 0.1, b: 0.15, a: 1.0 },
+            clearValue: { r: 0.05, g: 0.06, b: 0.08, a: 1.0 }, // Dark blue-gray
             loadOp: 'clear',
             storeOp: 'store'
           }],
@@ -355,6 +419,12 @@ export const Viewport3D: React.FC = () => {
           if (!document.contains(currentCanvas)) {
             Logger.info('Real unmount detected, cleaning up WebGPU');
 
+            // Clean up camera controller
+            if (cameraControllerRef.current) {
+              cameraControllerRef.current.destroy();
+              cameraControllerRef.current = null;
+            }
+
             // Clean up cube resources
             if (cubeRef.current) {
               cubeRef.current.vertexBuffer.destroy();
@@ -385,6 +455,31 @@ export const Viewport3D: React.FC = () => {
       <canvas ref={canvasRef} className="viewport-canvas" />
       <div className="viewport-overlay">
         <div className="viewport-status">{status}</div>
+        <div className="viewport-controls">
+          <div style={{
+            position: 'absolute',
+            bottom: '1rem',
+            left: '1rem',
+            background: 'rgba(26, 26, 36, 0.95)',
+            padding: '1rem',
+            borderRadius: '8px',
+            fontSize: '0.875rem',
+            color: '#e0e0e0',
+            backdropFilter: 'blur(10px)',
+            maxWidth: '400px',
+          }}>
+            <div style={{ marginBottom: '0.5rem', color: '#4a9eff', fontWeight: 600 }}>
+              Camera: {cameraMode}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#888', lineHeight: '1.5' }}>
+              <div>1 - Free Orbit</div>
+              <div>2 - Locked Orbit</div>
+              <div>3 - Drone FPV</div>
+              <div>4 - Cinematic</div>
+              <div>R - Reset Camera</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
