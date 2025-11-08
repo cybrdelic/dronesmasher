@@ -17,6 +17,7 @@ import { CinematicControls } from './CinematicControls';
 import { Vec3 } from '../math/Vec3';
 import { Mat4 } from '../math/Mat4';
 import { Logger } from '../utils/Logger';
+import './Viewport3DEnhanced.css';
 
 interface CubeResources {
   pipeline: GPURenderPipeline;
@@ -249,56 +250,6 @@ export const Viewport3DEnhanced: React.FC = () => {
           effects={effects}
         />
       </div>
-
-      <style jsx>{`
-        .viewport-enhanced {
-          width: 100%;
-          height: 100%;
-          position: relative;
-          background: linear-gradient(180deg, #0a0a0f 0%, #1a1a24 100%);
-        }
-
-        .viewport-canvas {
-          width: 100%;
-          height: 100%;
-          display: block;
-        }
-
-        .viewport-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          pointer-events: none;
-        }
-
-        .viewport-overlay > * {
-          pointer-events: auto;
-        }
-
-        .viewport-status {
-          position: absolute;
-          top: 1rem;
-          left: 1rem;
-          background: rgba(26, 26, 36, 0.95);
-          padding: 0.75rem 1rem;
-          border-radius: 6px;
-          font-size: 0.875rem;
-          color: #888;
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-        }
-
-        .sequence-indicator {
-          margin-top: 0.5rem;
-          padding-top: 0.5rem;
-          border-top: 1px solid #2a2a3a;
-          color: #f59e0b;
-          font-weight: 600;
-        }
-      `}</style>
     </div>
   );
 };
