@@ -244,10 +244,10 @@ export const Viewport3D: React.FC = () => {
         // Update rotation
         rotationRef.current += 0.01;
 
-        // Compute MVP matrix
-        const model = Mat4.identity()
-          .rotateY(rotationRef.current)
-          .rotateX(rotationRef.current * 0.7);
+        // Compute MVP matrix - combine rotation matrices
+        const rotY = Mat4.rotationY(rotationRef.current);
+        const rotX = Mat4.rotationX(rotationRef.current * 0.7);
+        const model = rotY.mul(rotX);
 
         const view = camera.viewMatrix;
         const projection = camera.projectionMatrix;
