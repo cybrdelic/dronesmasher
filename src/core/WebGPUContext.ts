@@ -138,20 +138,25 @@ export class WebGPUContext {
 
   // Cleanup
   destroy() {
-    Logger.debug('Destroying WebGPU context');
+    Logger.info(`Destroying WebGPU context (Device #${this.deviceId})`);
 
     // Unconfigure canvas context first to break device association
     if (this.context) {
       try {
         this.context.unconfigure();
-        Logger.debug('Canvas context unconfigured');
+        Logger.debug(`Device #${this.deviceId}: Canvas context unconfigured`);
       } catch (e) {
-        Logger.warn('Failed to unconfigure canvas context', e);
+        Logger.warn(`Device #${this.deviceId}: Failed to unconfigure canvas context`, e);
       }
     }
 
     // Then destroy the device
     this.device.destroy();
-    Logger.debug('Device destroyed');
+    WebGPUContext.activeDevices.delete(this.deviceId);
+
+    Logger.info(`Device #${this.deviceId} destroyed`, {
+      activeDevices: WebGPUContext.activeDevices.size,
+      remainingDeviceIds: Array.from(WebGPUContext.activeDevices)
+    });
   }
 }

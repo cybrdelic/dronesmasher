@@ -1,6 +1,7 @@
 import React from 'react';
 import { Viewport3D } from './Viewport3D';
 import { ErrorPanel } from './ErrorPanel';
+import { DebugPanel } from './DebugPanel';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -79,6 +80,7 @@ export const App: React.FC = () => {
         </aside>
       </main>
 
+      <DebugPanel />
       <ErrorPanel />
     </div>
   );

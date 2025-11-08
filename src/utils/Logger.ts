@@ -19,7 +19,7 @@ interface LogEntry {
 }
 
 class LoggerImpl {
-  private level: LogLevel = LogLevel.INFO;
+  public level: LogLevel = LogLevel.DEBUG; // Default to DEBUG for development
   private entries: LogEntry[] = [];
   private recentMessages = new Map<string, { timestamp: number; count: number }>();
   private readonly SPAM_THRESHOLD = 500; // ms
